@@ -9,6 +9,7 @@ import zigpy.types as t
 from zigpy.zcl import foundation
 from zigpy.zcl.clusters.general import (
     AnalogInput,
+    AnalogOutput,
     Basic,
     GreenPowerProxy,
     Groups,
@@ -35,15 +36,25 @@ from zhaquirks.const import (
     OUTPUT_CLUSTERS,
     PROFILE_ID,
 )
-from zhaquirks.tuya import (
+from zhaquirks.tuya import TuyaLocalCluster, TuyaManufCluster, TuyaNewManufCluster
+from zhaquirks.tuya.mcu import (
     DPToAttributeMapping,
-    TuyaLocalCluster,
-    TuyaManufCluster,
-    TuyaNewManufCluster,
+    TuyaAttributesCluster,
+    TuyaMCUCluster,
 )
-from zhaquirks.tuya.mcu import TuyaMCUCluster
 
 ZONE_TYPE = 0x0001
+
+
+class TuyaMmwRadarSelfTest(t.enum8):
+    """Mmw radar self test values."""
+
+    TESTING = 0
+    TEST_SUCCESS = 1
+    TEST_FAILURE = 2
+    OTHER = 3
+    COMM_FAULT = 4
+    RADAR_FAULT = 5
 
 
 class TuyaOccupancySensing(OccupancySensing, TuyaLocalCluster):
@@ -56,6 +67,80 @@ class TuyaAnalogInput(AnalogInput, TuyaLocalCluster):
 
 class TuyaIlluminanceMeasurement(IlluminanceMeasurement, TuyaLocalCluster):
     """Tuya local IlluminanceMeasurement cluster."""
+
+
+class TuyaMmwRadarSensitivity(TuyaAttributesCluster, AnalogOutput):
+    """AnalogOutput cluster for sensitivity."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(self.attributes_by_name["description"].id, "sensitivity")
+        self._update_attribute(self.attributes_by_name["min_present_value"].id, 1)
+        self._update_attribute(self.attributes_by_name["max_present_value"].id, 9)
+        self._update_attribute(self.attributes_by_name["resolution"].id, 1)
+
+
+class TuyaMmwRadarMinRange(TuyaAttributesCluster, AnalogOutput):
+    """AnalogOutput cluster for min range."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(self.attributes_by_name["description"].id, "min_range")
+        self._update_attribute(self.attributes_by_name["min_present_value"].id, 0)
+        self._update_attribute(self.attributes_by_name["max_present_value"].id, 950)
+        self._update_attribute(self.attributes_by_name["resolution"].id, 10)
+        self._update_attribute(
+            self.attributes_by_name["engineering_units"].id, 118
+        )  # 31: meters
+
+
+class TuyaMmwRadarMaxRange(TuyaAttributesCluster, AnalogOutput):
+    """AnalogOutput cluster for max range."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(self.attributes_by_name["description"].id, "max_range")
+        self._update_attribute(self.attributes_by_name["min_present_value"].id, 10)
+        self._update_attribute(self.attributes_by_name["max_present_value"].id, 950)
+        self._update_attribute(self.attributes_by_name["resolution"].id, 10)
+        self._update_attribute(
+            self.attributes_by_name["engineering_units"].id, 118
+        )  # 31: meters
+
+
+class TuyaMmwRadarDetectionDelay(TuyaAttributesCluster, AnalogOutput):
+    """AnalogOutput cluster for detection delay."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(
+            self.attributes_by_name["description"].id, "detection_delay"
+        )
+        self._update_attribute(self.attributes_by_name["min_present_value"].id, 000)
+        self._update_attribute(self.attributes_by_name["max_present_value"].id, 20000)
+        self._update_attribute(self.attributes_by_name["resolution"].id, 100)
+        self._update_attribute(
+            self.attributes_by_name["engineering_units"].id, 159
+        )  # 73: seconds
+
+
+class TuyaMmwRadarFadingTime(TuyaAttributesCluster, AnalogOutput):
+    """AnalogOutput cluster for fading time."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(self.attributes_by_name["description"].id, "fading_time")
+        self._update_attribute(self.attributes_by_name["min_present_value"].id, 2000)
+        self._update_attribute(self.attributes_by_name["max_present_value"].id, 200000)
+        self._update_attribute(self.attributes_by_name["resolution"].id, 1000)
+        self._update_attribute(
+            self.attributes_by_name["engineering_units"].id, 159
+        )  # 73: seconds
 
 
 class TuyaTemperatureMeasurement(TemperatureMeasurement, TuyaLocalCluster):
@@ -115,6 +200,20 @@ class NeoMotionManufCluster(TuyaNewManufCluster):
     }
 
 
+class TuyaMmwRadarTargetDistance(TuyaAttributesCluster, AnalogInput):
+    """AnalogInput cluster for target distance."""
+
+    def __init__(self, *args, **kwargs):
+        """Init."""
+        super().__init__(*args, **kwargs)
+        self._update_attribute(
+            self.attributes_by_name["description"].id, "target_distance"
+        )
+        self._update_attribute(
+            self.attributes_by_name["engineering_units"].id, 31
+        )  # 31: meters
+
+
 class MmwRadarManufCluster(TuyaMCUCluster):
     """Neo manufacturer cluster."""
 
@@ -136,13 +235,16 @@ class MmwRadarManufCluster(TuyaMCUCluster):
     attributes.update(
         {
             # ramdom attribute IDs
-            0xEF02: ("dp_2", t.uint32_t, True),
-            0xEF03: ("dp_3", t.uint32_t, True),
-            0xEF04: ("dp_4", t.uint32_t, True),
-            0xEF06: ("dp_6", t.enum8, True),
-            0xEF65: ("dp_101", t.uint32_t, True),
-            0xEF66: ("dp_102", t.uint32_t, True),
-            0xEF67: ("dp_103", t.CharacterString, True),
+            0xEF01: ("occupancy", t.uint32_t, True),
+            0xEF02: ("sensitivity", t.uint32_t, True),
+            0xEF03: ("min_range", t.uint32_t, True),
+            0xEF04: ("max_range", t.uint32_t, True),
+            0xEF06: ("self_test", TuyaMmwRadarSelfTest, True),
+            0xEF09: ("target_distance", t.uint32_t, True),
+            0xEF65: ("detection_delay", t.uint32_t, True),
+            0xEF66: ("fading_time", t.uint32_t, True),
+            0xEF67: ("cli", t.CharacterString, True),
+            0xEF68: ("illuminance", t.uint32_t, True),
             0xEF69: ("dp_105", t.enum8, True),
             0xEF6A: ("dp_106", t.enum8, True),
             0xEF6B: ("dp_107", t.enum8, True),
@@ -156,58 +258,87 @@ class MmwRadarManufCluster(TuyaMCUCluster):
             "occupancy",
         ),
         2: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_2",
+            TuyaMmwRadarSensitivity.ep_attribute,
+            "present_value",
         ),
         3: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_3",
+            TuyaMmwRadarMinRange.ep_attribute,
+            "present_value",
+            endpoint_id=2,
         ),
         4: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_4",
+            TuyaMmwRadarMaxRange.ep_attribute,
+            "present_value",
+            endpoint_id=3,
         ),
         6: DPToAttributeMapping(
             TuyaMCUCluster.ep_attribute,
-            "dp_6",
+            "self_test",
         ),
         9: DPToAttributeMapping(
-            TuyaAnalogInput.ep_attribute,
+            TuyaMmwRadarTargetDistance.ep_attribute,
             "present_value",
             lambda x: x / 100,
         ),
         101: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_101",
+            TuyaMmwRadarDetectionDelay.ep_attribute,
+            "present_value",
+            converter=lambda x: x * 100,
+            dp_converter=lambda x: x // 100,
+            endpoint_id=4,
         ),
         102: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_102",
+            TuyaMmwRadarFadingTime.ep_attribute,
+            "present_value",
+            converter=lambda x: x * 100,
+            dp_converter=lambda x: x // 100,
+            endpoint_id=5,
         ),
         103: DPToAttributeMapping(
             TuyaMCUCluster.ep_attribute,
-            "dp_103",
+            "cli",
         ),
         104: DPToAttributeMapping(
             TuyaIlluminanceMeasurement.ep_attribute,
             "measured_value",
-            lambda x: 10000 * math.log10(x) + 1 if x != 0 else 0,
+            converter=lambda x: int(math.log10(x) * 10000 + 1) if x > 0 else int(0),
         ),
         105: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_105",
+            TuyaOccupancySensing.ep_attribute,
+            "occupancy",
         ),
         106: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_106",
+            TuyaMmwRadarSensitivity.ep_attribute,
+            "present_value",
         ),
         107: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_107",
+            TuyaMmwRadarMaxRange.ep_attribute,
+            "present_value",
+            endpoint_id=3,
         ),
         108: DPToAttributeMapping(
-            TuyaMCUCluster.ep_attribute,
-            "dp_108",
+            TuyaMmwRadarMinRange.ep_attribute,
+            "present_value",
+            endpoint_id=2,
+        ),
+        109: DPToAttributeMapping(
+            TuyaMmwRadarTargetDistance.ep_attribute,
+            "present_value",
+            lambda x: x / 100,
+        ),
+        110: DPToAttributeMapping(
+            TuyaMmwRadarFadingTime.ep_attribute,
+            "present_value",
+            converter=lambda x: x * 100,
+            dp_converter=lambda x: x // 100,
+            endpoint_id=5,
+        ),
+        111: DPToAttributeMapping(
+            TuyaMmwRadarDetectionDelay.ep_attribute,
+            "present_value",
+            converter=lambda x: x * 100,
+            dp_converter=lambda x: x // 100,
+            endpoint_id=4,
         ),
     }
 
@@ -226,6 +357,9 @@ class MmwRadarManufCluster(TuyaMCUCluster):
         106: "_dp_2_attr_update",
         107: "_dp_2_attr_update",
         108: "_dp_2_attr_update",
+        109: "_dp_2_attr_update",
+        110: "_dp_2_attr_update",
+        111: "_dp_2_attr_update",
     }
 
 
@@ -381,8 +515,42 @@ class MmwRadarMotion(CustomDevice):
                     TuyaOccupancySensing,
                     TuyaAnalogInput,
                     TuyaIlluminanceMeasurement,
+                    TuyaMmwRadarTargetDistance,
+                    TuyaMmwRadarSensitivity,
                 ],
                 OUTPUT_CLUSTERS: [Time.cluster_id, Ota.cluster_id],
+            },
+            2: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarMinRange,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            3: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarMaxRange,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            4: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarDetectionDelay,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            5: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarFadingTime,
+                ],
+                OUTPUT_CLUSTERS: [],
             },
         }
     }
@@ -398,6 +566,7 @@ class MmwRadarMotionGPP(CustomDevice):
             ("_TZE200_ar0slwnd", "TS0601"),
             ("_TZE200_sfiy5tfs", "TS0601"),
             ("_TZE200_mrf6vtua", "TS0601"),
+            ("_TZE204_sxm7l9xa", "TS0601"),
         ],
         ENDPOINTS: {
             1: {
@@ -436,8 +605,42 @@ class MmwRadarMotionGPP(CustomDevice):
                     TuyaOccupancySensing,
                     TuyaAnalogInput,
                     TuyaIlluminanceMeasurement,
+                    TuyaMmwRadarTargetDistance,
+                    TuyaMmwRadarSensitivity,
                 ],
                 OUTPUT_CLUSTERS: [Time.cluster_id, Ota.cluster_id],
+            },
+            2: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarMinRange,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            3: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarMaxRange,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            4: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarDetectionDelay,
+                ],
+                OUTPUT_CLUSTERS: [],
+            },
+            5: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.COMBINED_INTERFACE,
+                INPUT_CLUSTERS: [
+                    TuyaMmwRadarFadingTime,
+                ],
+                OUTPUT_CLUSTERS: [],
             },
             242: {
                 PROFILE_ID: zgp.PROFILE_ID,
